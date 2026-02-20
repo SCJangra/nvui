@@ -1,0 +1,15 @@
+[package]
+name = "nvui-nvim-client"
+version = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+rmp = { workspace = true }
+rmp-serde = { workspace = true }
+rmpv = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+smol = "2"
+assertables = "9"
