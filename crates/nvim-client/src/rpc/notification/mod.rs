@@ -1,18 +1,18 @@
-use serde::Deserialize;
+use nvui_serde::{DeserializeTuple, SerializeTuple};
 
-use crate::RpcNotification;
-
-#[derive(Debug, Deserialize)]
+#[derive(Debug, PartialEq, SerializeTuple, DeserializeTuple)]
 pub enum NvimNotification {
-	Unknown,
+	Redraw(RedrawNotification),
 }
 
-impl<'a> TryFrom<RpcNotification<'a, rmpv::Value>> for NvimNotification {
-	type Error = rmp_serde::decode::Error;
+#[derive(Debug, PartialEq, SerializeTuple, DeserializeTuple)]
+pub enum RedrawNotification {
+	GridResize(#[tuple(flatten)] GridResizeEvent),
+}
 
-	fn try_from(value: RpcNotification<'a, rmpv::Value>) -> Result<Self, Self::Error> {
-		match value.method {
-			_ => Ok(Self::Unknown),
-		}
-	}
+#[derive(Debug, PartialEq, SerializeTuple, DeserializeTuple)]
+pub struct GridResizeEvent {
+	pub grid: u64,
+	pub width: u64,
+	pub height: u64,
 }

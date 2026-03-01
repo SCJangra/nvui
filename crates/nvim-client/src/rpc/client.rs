@@ -32,11 +32,11 @@ struct RpcClientInner {
 	/// Pending ['RpcRequest']s
 	pending: DashMap<u32, Sender<RpcResponse<rmpv::Value>>>,
 
-	/// All the subscriptions to ['RpcNotification']s
+	/// All the subscriptions to [`NvimNotification`]s
 	subscription: ArcSwap<Option<Sender<NvimNotification>>>,
 
 	/// Sends requests to the thread that writes messages to the server
-	request: Sender<RpcRequest<'static, rmpv::Value>>,
+	request: Sender<RpcRequest<rmpv::Value>>,
 }
 
 impl RpcClientInner {
@@ -44,7 +44,7 @@ impl RpcClientInner {
 		self: Arc<Self>,
 		reader: R,
 		writer: W,
-		request: Receiver<RpcRequest<'static, rmpv::Value>>,
+		request: Receiver<RpcRequest<rmpv::Value>>,
 	) -> (thread::JoinHandle<()>, thread::JoinHandle<()>)
 	where
 		R: io::Read + Send + Sync + 'static,
@@ -84,7 +84,7 @@ impl RpcClientInner {
 		(read_handle, write_handle)
 	}
 
-	fn send_request<'a, P, W>(request: RpcRequest<'a, P>, writer: &mut W) -> Result<(), RpcError>
+	fn send_request<P, W>(request: RpcRequest<P>, writer: &mut W) -> Result<(), RpcError>
 	where
 		P: Serialize,
 		W: io::Write,
@@ -96,16 +96,13 @@ impl RpcClientInner {
 		Ok(())
 	}
 
-	fn pricess_msg<'a>(&self, msg: RpcMessage<'a, rmpv::Value>) -> Result<(), RpcError> {
+	fn pricess_msg(&self, msg: RpcMessage<rmpv::Value>) -> Result<(), RpcError> {
 		match msg {
 			RpcMessage::Request(_) => {
 				// TODO: Log this request
 				return Ok(());
 			},
 			RpcMessage::Notification(notification) => {
-				let notification =
-					NvimNotification::try_from(notification).map_err(RpcError::DeserializeNotification)?;
-
 				let sub = self.subscription.load();
 
 				#[rustfmt::skip]
@@ -152,11 +149,11 @@ impl RpcClient {
 		self.inner.pending.insert(id, sender);
 
 		let val = rmpv::ext::to_value(params)?;
-		let req = RpcRequest { id, method: M::METHOD.into(), params: val };
+		let req = RpcRequest { id, method: M::METHOD.to_string(), params: val };
 
 		self.inner.request.send(req).map_err(|_| RpcError::SendRequest)?;
 
-		let response = receiver.recv_async().await?.result.map_err(RpcError::Response)?;
+		let response = receiver.recv_async().await?.into_result().map_err(RpcError::Response)?;
 
 		let response: M::Response = rmpv::ext::from_value(response)?;
 		Ok(response)

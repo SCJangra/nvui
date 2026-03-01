@@ -1,0 +1,19 @@
+[package]
+name = "nvui-derive"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full"] }
+darling = "0.21"
+heck = "0.5"
+
+[dev-dependencies]
+nvui-serde = { path = "../serde" }
+serde_json = "1"
+serde = { workspace = true }
