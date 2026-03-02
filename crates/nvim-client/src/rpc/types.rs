@@ -2,8 +2,18 @@ use nvui_serde::{DeserializeTuple, SerializeTuple};
 
 use super::NvimNotification;
 
-#[derive(Debug, PartialEq, SerializeTuple, DeserializeTuple)]
-pub enum RpcMessage<T> {
+#[derive(Debug, SerializeTuple)]
+#[cfg_attr(test, derive(PartialEq))]
+pub enum OutgoingRpcMessage<T> {
+	#[tuple(rename = 0)]
+	Request(#[tuple(flatten)] RpcRequest<T>),
+	#[tuple(rename = 1)]
+	Response(#[tuple(flatten)] RpcResponse<T>),
+}
+
+#[derive(Debug, DeserializeTuple)]
+#[cfg_attr(test, derive(PartialEq))]
+pub enum IncomingRpcMessage<T> {
 	#[tuple(rename = 0)]
 	Request(#[tuple(flatten)] RpcRequest<T>),
 	#[tuple(rename = 1)]
@@ -12,26 +22,28 @@ pub enum RpcMessage<T> {
 	Notification(#[tuple(flatten)] NvimNotification),
 }
 
-#[derive(Debug, PartialEq, SerializeTuple, DeserializeTuple)]
+#[derive(Debug, SerializeTuple, DeserializeTuple)]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct RpcRequest<P> {
 	pub id: u32,
 	pub method: String,
 	pub params: P,
 }
 
-#[derive(Debug, PartialEq, SerializeTuple, DeserializeTuple)]
+#[derive(Debug, SerializeTuple, DeserializeTuple)]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct RpcResponse<R> {
 	pub id: u32,
-	pub error: Option<rmpv::Value>,
-	pub result: Option<R>,
+	pub error: rmpv::Value,
+	pub result: R,
 }
 
 impl<R> RpcResponse<R> {
 	pub fn into_result(self) -> Result<R, rmpv::Value> {
-		match (self.error, self.result) {
-			(Some(error), _) => Err(error),
-			(None, Some(result)) => Ok(result),
-			(None, None) => Err(rmpv::Value::Nil),
+		if self.error.is_nil() {
+			Ok(self.result)
+		} else {
+			Err(self.error)
 		}
 	}
 }

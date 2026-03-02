@@ -7,7 +7,10 @@ use dashmap::DashMap;
 use flume::{Receiver, Sender};
 use serde::{Deserialize, Serialize};
 
-use crate::{NvimNotification, RpcError, RpcMessage, RpcMethod, RpcRequest, RpcResponse};
+use crate::{
+	IncomingRpcMessage, NvimNotification, OutgoingRpcMessage, RpcError, RpcMethod, RpcRequest,
+	RpcResponse,
+};
 
 /// A general msgpack RPC client
 pub struct RpcClient {
@@ -70,7 +73,7 @@ impl RpcClientInner {
 		let read_handle = thread::spawn(move || {
 			let mut deserializer = rmp_serde::Deserializer::new(io::BufReader::new(reader));
 
-			while let Ok(msg) = RpcMessage::<rmpv::Value>::deserialize(&mut deserializer) {
+			while let Ok(msg) = IncomingRpcMessage::<rmpv::Value>::deserialize(&mut deserializer) {
 				if !self.running.load(Ordering::SeqCst) {
 					break;
 				}
@@ -89,27 +92,27 @@ impl RpcClientInner {
 		P: Serialize,
 		W: io::Write,
 	{
-		let msg = RpcMessage::Request(request);
+		let msg = OutgoingRpcMessage::Request(request);
 		rmp_serde::encode::write(writer, &msg)?;
 		writer.flush().map_err(RpcError::FlushRequest)?;
 
 		Ok(())
 	}
 
-	fn pricess_msg(&self, msg: RpcMessage<rmpv::Value>) -> Result<(), RpcError> {
+	fn pricess_msg(&self, msg: IncomingRpcMessage<rmpv::Value>) -> Result<(), RpcError> {
 		match msg {
-			RpcMessage::Request(_) => {
+			IncomingRpcMessage::Request(_) => {
 				// TODO: Log this request
 				return Ok(());
 			},
-			RpcMessage::Notification(notification) => {
+			IncomingRpcMessage::Notification(notification) => {
 				let sub = self.subscription.load();
 
 				#[rustfmt::skip]
                 let Some(sub) = sub.as_ref() else { return Ok(()); };
 				sub.send(notification).map_err(|_| RpcError::SendNotification)?;
 			},
-			RpcMessage::Response(response) => {
+			IncomingRpcMessage::Response(response) => {
 				#[rustfmt::skip]
                 let Some(req) = self.pending.get(&response.id) else { return Ok(()) };
 				req.send(response).map_err(|_| RpcError::SendResponse)?;
@@ -194,9 +197,7 @@ impl Drop for RpcClient {
 
 #[cfg(test)]
 mod tests {
-	use crate::NvimEval;
-
-	use super::RpcClient;
+	use crate::{NvimEval, NvimUiAttach, NvimUiAttachParams, NvimUiOptions, RpcClient};
 
 	#[test]
 	fn call() {
@@ -216,5 +217,29 @@ mod tests {
 		let response = smol::block_on(future).unwrap();
 
 		assert_eq!(response, rmpv::Value::from(2));
+	}
+
+	#[test]
+	fn abc() {
+		let mut nvim = std::process::Command::new("nvim")
+			.arg("--embed")
+			.stdin(std::process::Stdio::piped())
+			.stdout(std::process::Stdio::piped())
+			.spawn()
+			.unwrap();
+
+		let stdin = nvim.stdin.take().unwrap();
+		let stdout = nvim.stdout.take().unwrap();
+
+		let client = RpcClient::start(stdout, stdin);
+
+		let params = NvimUiAttachParams { width: 80, height: 40, options: NvimUiOptions::all() };
+
+		let future = client.call::<NvimUiAttach>(params);
+		let response = smol::block_on(future).unwrap(); // Getting error on this unwrap
+		let notification = client.subscribe().unwrap();
+
+		assert_eq!(response, rmpv::Value::from(2));
+		notification.iter().for_each(|n| println!("Notification: {n:#?}"));
 	}
 }

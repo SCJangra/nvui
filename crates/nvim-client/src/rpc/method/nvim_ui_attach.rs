@@ -3,6 +3,7 @@ use serde::Serialize;
 
 use crate::RpcMethod;
 
+/// Neovim's [`nvim_ui_attach`](https://neovim.io/doc/user/api/#nvim_ui_attach()) function
 pub struct NvimUiAttach;
 
 impl RpcMethod for NvimUiAttach {
@@ -19,8 +20,14 @@ pub struct NvimUiAttachParams {
 	pub options: NvimUiOptions,
 }
 
-#[derive(Debug, Serialize)]
+/// Neovim's external UI [`options`](https://neovim.io/doc/user/api-ui-events/#ui-option)
+#[derive(Debug, Default, Serialize)]
 pub struct NvimUiOptions {
-	#[serde(default = "default_true")]
 	pub ext_multigrid: bool,
+}
+
+impl NvimUiOptions {
+	pub fn all() -> Self {
+		Self { ext_multigrid: true }
+	}
 }
