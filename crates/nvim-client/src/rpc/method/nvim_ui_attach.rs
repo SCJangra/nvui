@@ -1,4 +1,4 @@
-use nvui_serde::SerializeTuple;
+use nvui_serde::SerializeMap;
 use serde::Serialize;
 
 use crate::RpcMethod;
@@ -13,7 +13,7 @@ impl RpcMethod for NvimUiAttach {
 	type Response = rmpv::Value;
 }
 
-#[derive(Debug, SerializeTuple)]
+#[derive(Debug, Serialize)]
 pub struct NvimUiAttachParams {
 	pub width: u32,
 	pub height: u32,
@@ -21,7 +21,7 @@ pub struct NvimUiAttachParams {
 }
 
 /// Neovim's external UI [`options`](https://neovim.io/doc/user/api-ui-events/#ui-option)
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Default, SerializeMap)]
 pub struct NvimUiOptions {
 	pub ext_multigrid: bool,
 }

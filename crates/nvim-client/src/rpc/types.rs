@@ -1,4 +1,6 @@
-use nvui_serde::{DeserializeTuple, SerializeTuple};
+use nvui_serde::{
+	DeserializeTuple, DeserializeTupleElements, SerializeTuple, SerializeTupleElements,
+};
 
 use super::NvimNotification;
 
@@ -22,7 +24,7 @@ pub enum IncomingRpcMessage<T> {
 	Notification(#[tuple(flatten)] NvimNotification),
 }
 
-#[derive(Debug, SerializeTuple, DeserializeTuple)]
+#[derive(Debug, SerializeTupleElements, DeserializeTupleElements)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct RpcRequest<P> {
 	pub id: u32,
@@ -30,7 +32,7 @@ pub struct RpcRequest<P> {
 	pub params: P,
 }
 
-#[derive(Debug, SerializeTuple, DeserializeTuple)]
+#[derive(Debug, SerializeTupleElements, DeserializeTupleElements)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct RpcResponse<R> {
 	pub id: u32,
@@ -40,10 +42,6 @@ pub struct RpcResponse<R> {
 
 impl<R> RpcResponse<R> {
 	pub fn into_result(self) -> Result<R, rmpv::Value> {
-		if self.error.is_nil() {
-			Ok(self.result)
-		} else {
-			Err(self.error)
-		}
+		if self.error.is_nil() { Ok(self.result) } else { Err(self.error) }
 	}
 }

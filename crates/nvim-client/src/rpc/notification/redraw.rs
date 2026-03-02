@@ -1,4 +1,4 @@
-use nvui_serde::DeserializeTuple;
+use nvui_serde::{DeserializeTuple, DeserializeTupleElements};
 
 use crate::CursorMode;
 
@@ -13,7 +13,7 @@ pub enum RedrawNotification {
 	ModeInfoSet(#[tuple(flatten)] ModeInfoSetEvent),
 }
 
-#[derive(Debug, DeserializeTuple)]
+#[derive(Debug, DeserializeTupleElements)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct GridResizeEvent {
 	pub grid: u64,
@@ -21,7 +21,7 @@ pub struct GridResizeEvent {
 	pub height: u64,
 }
 
-#[derive(Debug, DeserializeTuple)]
+#[derive(Debug, DeserializeTupleElements)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct ModeInfoSetEvent {
 	pub cursor_style_enabled: bool,

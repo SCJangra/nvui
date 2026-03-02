@@ -236,10 +236,8 @@ mod tests {
 		let params = NvimUiAttachParams { width: 80, height: 40, options: NvimUiOptions::all() };
 
 		let future = client.call::<NvimUiAttach>(params);
-		let response = smol::block_on(future).unwrap(); // Getting error on this unwrap
-		let notification = client.subscribe().unwrap();
+		let response = smol::block_on(future).unwrap();
 
-		assert_eq!(response, rmpv::Value::from(2));
-		notification.iter().for_each(|n| println!("Notification: {n:#?}"));
+		assert_eq!(response, rmpv::Value::Nil);
 	}
 }

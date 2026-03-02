@@ -1,23 +1,32 @@
 use nvui_serde::{
-	DeserializeTuple, DeserializeTupleElements, SerializeTuple, SerializeTupleElements,
+	DeserializeTuple, DeserializeTupleElements, SerializeMap, SerializeTuple,
+	SerializeTupleElements,
 };
 use serde::Deserializer;
 
-#[derive(Debug, PartialEq, SerializeTuple, DeserializeTuple)]
+#[derive(Debug, Clone, PartialEq, SerializeTupleElements, DeserializeTupleElements)]
 struct OrdinaryStruct {
 	a: u32,
 	b: String,
 	c: Vec<String>,
 }
 
-#[derive(Debug, PartialEq, SerializeTuple, DeserializeTuple)]
+#[derive(Debug, Clone, PartialEq, SerializeTupleElements, DeserializeTupleElements)]
 struct StructWithFlattenedFields {
 	a: u32,
 	#[tuple(flatten)]
 	ordinary: OrdinaryStruct,
 }
 
-#[derive(Debug, PartialEq, SerializeTuple, DeserializeTuple)]
+#[derive(Debug, Clone, PartialEq, SerializeTuple, DeserializeTuple)]
+enum StructCarrier {
+	#[tuple(rename = "ordinary")]
+	Ordinary(#[tuple(flatten)] OrdinaryStruct),
+	#[tuple(rename = "flattened")]
+	Flattened(#[tuple(flatten)] StructWithFlattenedFields),
+}
+
+#[derive(Debug, Clone, PartialEq, SerializeTuple, DeserializeTuple)]
 enum RandomEnum {
 	First,
 	Second(u64, String),
@@ -29,12 +38,18 @@ enum RandomEnum {
 	},
 }
 
-#[derive(Debug, PartialEq, SerializeTuple, DeserializeTuple)]
+#[derive(Debug, Clone, PartialEq, SerializeTuple, DeserializeTuple)]
 enum NumericallyTaggedEnum {
 	#[tuple(rename = 0)]
 	Connected,
 	#[tuple(rename = 1)]
 	Disconnected(u64),
+}
+
+#[derive(Debug, SerializeMap)]
+struct ForcedMapStruct {
+	alpha: u32,
+	beta: String,
 }
 
 fn sample_ordinary_struct() -> OrdinaryStruct {
@@ -50,41 +65,41 @@ fn sample_flattened_struct() -> StructWithFlattenedFields {
 }
 
 #[test]
-fn roundtrip_ordinary_struct() {
-	let value = sample_ordinary_struct();
-	let serialized = serde_json::to_value(&value).unwrap();
-	let deserialized: OrdinaryStruct = serde_json::from_value(serialized.clone()).unwrap();
+fn roundtrip_struct_tuple_elements_through_enum() {
+	let ordinary = sample_ordinary_struct();
+	let ordinary_carrier = StructCarrier::Ordinary(ordinary.clone());
+	let ordinary_json = serde_json::to_value(&ordinary_carrier).unwrap();
+	let ordinary_back: StructCarrier = serde_json::from_value(ordinary_json.clone()).unwrap();
 
+	assert_eq!(ordinary.tuple_len(), 3);
 	assert_eq!(
-		serialized,
+		ordinary_json,
 		serde_json::json!([
+			"ordinary",
 			10,
 			"random string",
 			["another random string", "a third random string"]
 		])
 	);
-	assert_eq!(value.tuple_len(), 3);
-	assert_eq!(deserialized, value);
-}
+	assert_eq!(ordinary_back, ordinary_carrier);
 
-#[test]
-fn roundtrip_struct_with_flattened_fields() {
-	let value = sample_flattened_struct();
-	let serialized = serde_json::to_value(&value).unwrap();
-	let deserialized: StructWithFlattenedFields =
-		serde_json::from_value(serialized.clone()).unwrap();
+	let flattened = sample_flattened_struct();
+	let flattened_carrier = StructCarrier::Flattened(flattened.clone());
+	let flattened_json = serde_json::to_value(&flattened_carrier).unwrap();
+	let flattened_back: StructCarrier = serde_json::from_value(flattened_json.clone()).unwrap();
 
+	assert_eq!(flattened.tuple_len(), 4);
 	assert_eq!(
-		serialized,
+		flattened_json,
 		serde_json::json!([
+			"flattened",
 			20,
 			10,
 			"random string",
 			["another random string", "a third random string"]
 		])
 	);
-	assert_eq!(value.tuple_len(), 4);
-	assert_eq!(deserialized, value);
+	assert_eq!(flattened_back, flattened_carrier);
 }
 
 #[test]
@@ -123,6 +138,14 @@ fn roundtrip_numeric_tagged_enum() {
 		serde_json::from_value(disconnected_json.clone()).unwrap();
 	assert_eq!(disconnected_json, serde_json::json!([1, 7]));
 	assert_eq!(disconnected_back, disconnected);
+}
+
+#[test]
+fn serialize_map_forces_object_shape() {
+	let value = ForcedMapStruct { alpha: 1, beta: String::from("two") };
+	let serialized = serde_json::to_value(&value).unwrap();
+
+	assert_eq!(serialized, serde_json::json!({ "alpha": 1, "beta": "two" }));
 }
 
 #[test]
