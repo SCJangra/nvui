@@ -1,4 +1,5 @@
 use serde::Serialize;
+use serde_tuple::Serialize_tuple;
 
 use crate::RpcMethod;
 
@@ -12,7 +13,7 @@ impl RpcMethod for NvimUiAttach {
 	type Response = rmpv::Value;
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize_tuple)]
 pub struct NvimUiAttachParams {
 	pub width: u32,
 	pub height: u32,
@@ -20,7 +21,7 @@ pub struct NvimUiAttachParams {
 }
 
 /// Neovim's external UI [`options`](https://neovim.io/doc/user/api-ui-events/#ui-option)
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Serialize)]
 pub struct NvimUiOptions {
 	pub ext_multigrid: bool,
 }
@@ -28,22 +29,5 @@ pub struct NvimUiOptions {
 impl NvimUiOptions {
 	pub fn all() -> Self {
 		Self { ext_multigrid: true }
-	}
-}
-
-mod ser_de {
-	use serde::ser::SerializeMap;
-
-	use super::*;
-
-	impl Serialize for NvimUiOptions {
-		fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-		where
-			S: serde::Serializer,
-		{
-			let mut map = serializer.serialize_map(Some(1))?;
-			map.serialize_entry("ext_multigrid", &self.ext_multigrid)?;
-			map.end()
-		}
 	}
 }

@@ -5,7 +5,7 @@ use std::{io, thread};
 use arc_swap::ArcSwap;
 use dashmap::DashMap;
 use flume::{Receiver, Sender};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::{
 	IncomingRpcMessage, NvimNotification, OutgoingRpcMessage, RpcError, RpcMethod, RpcRequest,
@@ -39,7 +39,7 @@ struct RpcClientInner {
 	subscription: ArcSwap<Option<Sender<NvimNotification>>>,
 
 	/// Sends requests to the thread that writes messages to the server
-	request: Sender<RpcRequest<rmpv::Value>>,
+	request: Sender<Vec<u8>>,
 }
 
 impl RpcClientInner {
@@ -47,7 +47,7 @@ impl RpcClientInner {
 		self: Arc<Self>,
 		reader: R,
 		writer: W,
-		request: Receiver<RpcRequest<rmpv::Value>>,
+		request: Receiver<Vec<u8>>,
 	) -> (thread::JoinHandle<()>, thread::JoinHandle<()>)
 	where
 		R: io::Read + Send + Sync + 'static,
@@ -76,7 +76,7 @@ impl RpcClientInner {
 			loop {
 				#[rustfmt::skip]
 				let Ok(msg) = IncomingRpcMessage::<rmpv::Value>::deserialize(&mut deserializer)
-					.inspect_err(|err| println!("failed to deserialize message, {err:#?}"))
+					 // TODO: Log error
 					 else { continue };
 
 				if !self.running.load(Ordering::SeqCst) {
@@ -92,13 +92,11 @@ impl RpcClientInner {
 		(read_handle, write_handle)
 	}
 
-	fn send_request<P, W>(request: RpcRequest<P>, writer: &mut W) -> Result<(), RpcError>
+	fn send_request<W>(request: Vec<u8>, writer: &mut W) -> Result<(), RpcError>
 	where
-		P: Serialize,
 		W: io::Write,
 	{
-		let msg = OutgoingRpcMessage::Request(request);
-		rmp_serde::encode::write(writer, &msg)?;
+		writer.write_all(&request).map_err(RpcError::FlushRequest)?;
 		writer.flush().map_err(RpcError::FlushRequest)?;
 
 		Ok(())
@@ -156,8 +154,9 @@ impl RpcClient {
 
 		self.inner.pending.insert(id, sender);
 
-		let val = rmpv::ext::to_value(params)?;
-		let req = RpcRequest { id, method: M::METHOD.to_string(), params: val };
+		let req =
+			OutgoingRpcMessage::Request(RpcRequest { id, method: M::METHOD.to_string(), params });
+		let req = rmp_serde::to_vec_named(&req)?;
 
 		self.inner.request.send(req).map_err(|_| RpcError::SendRequest)?;
 
@@ -202,7 +201,7 @@ impl Drop for RpcClient {
 
 #[cfg(test)]
 mod tests {
-	use crate::{NvimEval, RpcClient};
+	use crate::{NvimEval, NvimUiAttach, NvimUiAttachParams, NvimUiOptions, RpcClient};
 
 	#[test]
 	fn call() {
@@ -222,5 +221,35 @@ mod tests {
 		let response = smol::block_on(future).unwrap();
 
 		assert_eq!(response, rmpv::Value::from(2));
+
+		nvim.kill().unwrap();
+		nvim.wait().unwrap();
+	}
+
+	#[test]
+	fn call_nvim_ui_attach() {
+		let mut nvim = std::process::Command::new("nvim")
+			.arg("--embed")
+			.stdin(std::process::Stdio::piped())
+			.stdout(std::process::Stdio::piped())
+			.spawn()
+			.unwrap();
+
+		let stdin = nvim.stdin.take().unwrap();
+		let stdout = nvim.stdout.take().unwrap();
+
+		let client = RpcClient::start(stdout, stdin);
+
+		let future = client.call::<NvimUiAttach>(NvimUiAttachParams {
+			width: 10,
+			height: 10,
+			options: NvimUiOptions::all(),
+		});
+		let response = smol::block_on(future).unwrap();
+
+		assert_eq!(response, rmpv::Value::Nil);
+
+		nvim.kill().unwrap();
+		nvim.wait().unwrap();
 	}
 }

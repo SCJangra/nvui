@@ -162,7 +162,7 @@ mod tests {
 			0x91, 0xA3, 0x64, 0x65, 0x66,
 		];
 
-		let req_serialized = rmp_serde::to_vec(&req).unwrap();
+		let req_serialized = rmp_serde::to_vec_named(&req).unwrap();
 
 		assert_eq!(req_serialized, req_bytes);
 

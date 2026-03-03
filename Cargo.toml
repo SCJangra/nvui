@@ -13,6 +13,7 @@ thiserror = "2"
 dashmap = "6"
 flume = "0.12"
 arc-swap = "1"
+serde_tuple = "1"
 
 [workspace.package]
 version = "0.1.0"
