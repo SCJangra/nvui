@@ -1,11 +1,16 @@
+use nvui_derive::DeserializeTaggedEnum;
 use serde::Deserialize;
 
-#[derive(Debug)]
+#[derive(Debug, DeserializeTaggedEnum)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum RedrawNotification {
-	GridResize(Vec<GridResizeEvent>),
+	GridResize(#[tagged_enum(flatten)] Vec<GridResizeEvent>),
 
-	Other { method: String, values: Vec<rmpv::Value> },
+	Other {
+		method: String,
+		#[tagged_enum(flatten)]
+		value: Vec<rmpv::Value>,
+	},
 }
 
 #[derive(Debug, Deserialize)]
@@ -14,61 +19,6 @@ pub struct GridResizeEvent {
 	pub grid: u32,
 	pub width: u32,
 	pub height: u32,
-}
-
-mod ser_de {
-	use serde::de::{Error as DeError, SeqAccess, Visitor};
-
-	use super::*;
-
-	struct RedrawNotificationVisitor;
-
-	impl<'de> Visitor<'de> for RedrawNotificationVisitor {
-		type Value = RedrawNotification;
-
-		fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-			formatter.write_str("a redraw notification array")
-		}
-
-		fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-		where
-			A: SeqAccess<'de>,
-		{
-			// First element: method name
-			let method =
-				seq.next_element::<String>()?.ok_or_else(|| DeError::invalid_length(0, &self))?;
-
-			match method.as_str() {
-				"grid_resize" => {
-					let mut events = Vec::new();
-
-					while let Some(event) = seq.next_element::<GridResizeEvent>()? {
-						events.push(event);
-					}
-
-					Ok(RedrawNotification::GridResize(events))
-				},
-				_ => {
-					let mut values = Vec::new();
-
-					while let Some(value) = seq.next_element::<rmpv::Value>()? {
-						values.push(value);
-					}
-
-					Ok(RedrawNotification::Other { method, values })
-				},
-			}
-		}
-	}
-
-	impl<'de> Deserialize<'de> for RedrawNotification {
-		fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-		where
-			D: serde::Deserializer<'de>,
-		{
-			deserializer.deserialize_seq(RedrawNotificationVisitor)
-		}
-	}
 }
 
 #[cfg(test)]
@@ -96,7 +46,7 @@ mod tests {
 	fn de_other() {
 		let expected = RedrawNotification::Other {
 			method: String::from("unknown"),
-			values: vec![
+			value: vec![
 				rmpv::Value::from("simple_string"),
 				rmpv::Value::from(vec![
 					rmpv::Value::from("array_string_1"),

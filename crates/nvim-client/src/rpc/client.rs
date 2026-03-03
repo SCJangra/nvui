@@ -15,6 +15,7 @@ use crate::{
 /// A general msgpack RPC client
 pub struct RpcClient {
 	inner: Arc<RpcClientInner>,
+	request: Sender<Vec<u8>>,
 
 	/// Handle for the thread that reads messages from the server
 	#[allow(unused)]
@@ -37,9 +38,6 @@ struct RpcClientInner {
 
 	/// All the subscriptions to [`NvimNotification`]s
 	subscription: ArcSwap<Option<Sender<NvimNotification>>>,
-
-	/// Sends requests to the thread that writes messages to the server
-	request: Sender<Vec<u8>>,
 }
 
 impl RpcClientInner {
@@ -59,10 +57,15 @@ impl RpcClientInner {
 		let write_handle = thread::spawn(move || {
 			let mut writer = io::BufWriter::new(writer);
 
-			while let Ok(request) = request.recv() {
+			loop {
 				if !self_clone.running.load(Ordering::SeqCst) {
 					break;
 				}
+
+				#[rustfmt::skip]
+				let Ok(request) = request.recv()
+					// TODO: Log error
+					else { continue };
 
 				#[rustfmt::skip]
                 let Err(_err) = Self::send_request(request, &mut writer) else { continue; };
@@ -74,14 +77,14 @@ impl RpcClientInner {
 			let mut deserializer = rmp_serde::Deserializer::new(io::BufReader::new(reader));
 
 			loop {
+				if !self.running.load(Ordering::SeqCst) {
+					break;
+				}
+
 				#[rustfmt::skip]
 				let Ok(msg) = IncomingRpcMessage::<rmpv::Value>::deserialize(&mut deserializer)
 					 // TODO: Log error
 					 else { continue };
-
-				if !self.running.load(Ordering::SeqCst) {
-					break;
-				}
 
 				#[rustfmt::skip]
                 let Err(_err) = self.pricess_msg(msg) else { continue; };
@@ -138,12 +141,11 @@ impl RpcClient {
 			running: AtomicBool::new(false),
 			pending: DashMap::new(),
 			subscription: ArcSwap::new(Arc::new(None)),
-			request: sender,
 		});
 
 		let (read_handle, write_handle) = inner.clone().start(reader, writer, receiver);
 
-		Self { inner, read_handle, write_handle }
+		Self { inner, request: sender, read_handle, write_handle }
 	}
 
 	pub async fn call_method<M>(&self, id: u32, params: M::Params) -> Result<M::Response, RpcError>
@@ -158,7 +160,7 @@ impl RpcClient {
 			OutgoingRpcMessage::Request(RpcRequest { id, method: M::METHOD.to_string(), params });
 		let req = rmp_serde::to_vec_named(&req)?;
 
-		self.inner.request.send(req).map_err(|_| RpcError::SendRequest)?;
+		self.request.send(req).map_err(|_| RpcError::SendRequest)?;
 
 		let response = receiver.recv_async().await?.result.map_err(RpcError::Response)?;
 
@@ -180,7 +182,6 @@ impl RpcClient {
 		if self.inner.subscription.load().is_some() {
 			return Err(RpcError::AlreadySubscribed);
 		}
-
 		let (sender, receiver) = flume::unbounded();
 
 		self.inner.subscription.store(Arc::new(Some(sender)));
@@ -191,11 +192,14 @@ impl RpcClient {
 	pub fn unsubscribe(&self) {
 		self.inner.subscription.store(Arc::new(None));
 	}
-}
 
-impl Drop for RpcClient {
-	fn drop(&mut self) {
-		self.inner.running.store(false, Ordering::SeqCst);
+	pub fn stop(self) {
+		let Self { inner, request, read_handle, write_handle } = self;
+
+		inner.running.store(false, Ordering::SeqCst);
+		drop(request);
+		let _ = read_handle.join();
+		let _ = write_handle.join();
 	}
 }
 
@@ -222,6 +226,7 @@ mod tests {
 
 		assert_eq!(response, rmpv::Value::from(2));
 
+		client.stop();
 		nvim.kill().unwrap();
 		nvim.wait().unwrap();
 	}
@@ -249,6 +254,7 @@ mod tests {
 
 		assert_eq!(response, rmpv::Value::Nil);
 
+		client.stop();
 		nvim.kill().unwrap();
 		nvim.wait().unwrap();
 	}

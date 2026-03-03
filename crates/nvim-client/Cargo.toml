@@ -13,6 +13,7 @@ dashmap = { workspace = true }
 flume = { workspace = true }
 arc-swap = { workspace = true }
 serde_tuple = { workspace = true }
+nvui-derive = { path = "../derive" }
 
 [dev-dependencies]
 smol = "2"
