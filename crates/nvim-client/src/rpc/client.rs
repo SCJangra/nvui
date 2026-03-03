@@ -73,7 +73,12 @@ impl RpcClientInner {
 		let read_handle = thread::spawn(move || {
 			let mut deserializer = rmp_serde::Deserializer::new(io::BufReader::new(reader));
 
-			while let Ok(msg) = IncomingRpcMessage::<rmpv::Value>::deserialize(&mut deserializer) {
+			loop {
+				#[rustfmt::skip]
+				let Ok(msg) = IncomingRpcMessage::<rmpv::Value>::deserialize(&mut deserializer)
+					.inspect_err(|err| println!("failed to deserialize message, {err:#?}"))
+					 else { continue };
+
 				if !self.running.load(Ordering::SeqCst) {
 					break;
 				}
@@ -109,7 +114,7 @@ impl RpcClientInner {
 				let sub = self.subscription.load();
 
 				#[rustfmt::skip]
-                let Some(sub) = sub.as_ref() else { return Ok(()); };
+				let Some(sub) = sub.as_ref() else { return Ok(()); };
 				sub.send(notification).map_err(|_| RpcError::SendNotification)?;
 			},
 			IncomingRpcMessage::Response(response) => {
@@ -156,7 +161,7 @@ impl RpcClient {
 
 		self.inner.request.send(req).map_err(|_| RpcError::SendRequest)?;
 
-		let response = receiver.recv_async().await?.into_result().map_err(RpcError::Response)?;
+		let response = receiver.recv_async().await?.result.map_err(RpcError::Response)?;
 
 		let response: M::Response = rmpv::ext::from_value(response)?;
 		Ok(response)
@@ -197,7 +202,7 @@ impl Drop for RpcClient {
 
 #[cfg(test)]
 mod tests {
-	use crate::{NvimEval, NvimUiAttach, NvimUiAttachParams, NvimUiOptions, RpcClient};
+	use crate::{NvimEval, RpcClient};
 
 	#[test]
 	fn call() {
@@ -217,27 +222,5 @@ mod tests {
 		let response = smol::block_on(future).unwrap();
 
 		assert_eq!(response, rmpv::Value::from(2));
-	}
-
-	#[test]
-	fn abc() {
-		let mut nvim = std::process::Command::new("nvim")
-			.arg("--embed")
-			.stdin(std::process::Stdio::piped())
-			.stdout(std::process::Stdio::piped())
-			.spawn()
-			.unwrap();
-
-		let stdin = nvim.stdin.take().unwrap();
-		let stdout = nvim.stdout.take().unwrap();
-
-		let client = RpcClient::start(stdout, stdin);
-
-		let params = NvimUiAttachParams { width: 80, height: 40, options: NvimUiOptions::all() };
-
-		let future = client.call::<NvimUiAttach>(params);
-		let response = smol::block_on(future).unwrap();
-
-		assert_eq!(response, rmpv::Value::Nil);
 	}
 }

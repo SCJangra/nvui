@@ -1,8 +1,0 @@
-[package]
-name = "nvui-serde"
-version.workspace = true
-edition.workspace = true
-
-[dependencies]
-serde = { workspace = true }
-nvui-derive = { path = "../derive" }
