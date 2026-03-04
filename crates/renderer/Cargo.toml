@@ -1,0 +1,9 @@
+[package]
+name = "nvui-renderer"
+version = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+thiserror = { workspace = true }
+wgpu = { workspace = true }
+raw-window-handle = { workspace = true }
