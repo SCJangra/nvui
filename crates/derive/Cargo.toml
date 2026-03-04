@@ -14,6 +14,3 @@ proc-macro2 = "1"
 heck = "0.5"
 
 [dev-dependencies]
-serde = { workspace = true }
-rmp-serde = { workspace = true }
-rmpv = { workspace = true }

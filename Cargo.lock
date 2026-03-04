@@ -433,9 +433,6 @@ dependencies = [
  "heck",
  "proc-macro2",
  "quote",
- "rmp-serde",
- "rmpv",
- "serde",
  "syn",
 ]
 

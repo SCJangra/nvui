@@ -11,6 +11,6 @@ pub enum CursorShape {
 
 #[derive(Debug, Deserialize)]
 #[cfg_attr(test, derive(PartialEq))]
-pub struct CursorMode {
+pub struct ModeInfo {
 	pub cursor_shape: Option<CursorShape>,
 }

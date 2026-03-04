@@ -87,8 +87,9 @@ impl RpcClientInner {
 					 else { continue };
 
 				#[rustfmt::skip]
-                let Err(_err) = self.pricess_msg(msg) else { continue; };
-				// TODO: Log error
+				let Err(_err) = self.pricess_msg(msg)
+					 // TODO: Log error
+					 else { continue; };
 			}
 		});
 

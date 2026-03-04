@@ -1,10 +1,14 @@
 use nvui_derive::DeserializeTaggedEnum;
 use serde::Deserialize;
 
+use crate::ModeInfo;
+
 #[derive(Debug, DeserializeTaggedEnum)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum RedrawNotification {
 	GridResize(#[tagged_enum(flatten)] Vec<GridResizeEvent>),
+
+	ModeInfoSet(#[tagged_enum(flatten)] Vec<ModeInfoSetEvent>),
 
 	Other {
 		method: String,
@@ -19,6 +23,13 @@ pub struct GridResizeEvent {
 	pub grid: u32,
 	pub width: u32,
 	pub height: u32,
+}
+
+#[derive(Debug, Deserialize)]
+#[cfg_attr(test, derive(PartialEq))]
+pub struct ModeInfoSetEvent {
+	pub cursor_style_enabled: bool,
+	pub mode_info: Vec<ModeInfo>,
 }
 
 #[cfg(test)]
