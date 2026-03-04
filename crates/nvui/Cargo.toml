@@ -1,0 +1,14 @@
+[package]
+name = "nvui"
+version = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+win = { package = "nvui-window", path = "../window" }
+nvui-renderer = { path = "../renderer" }
+
+flume = { workspace = true }
+smol = { workspace = true }
+wgpu = { workspace = true }
+winit = { workspace = true }
+thiserror = { workspace = true }

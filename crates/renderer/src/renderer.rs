@@ -1,55 +1,78 @@
-use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
-
 use crate::{RendererConfig, RendererError};
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle};
 
-pub struct Renderer<'window> {
-	surface: wgpu::Surface<'window>,
+pub struct Renderer {
+	surface: wgpu::Surface<'static>,
 	device: wgpu::Device,
 	queue: wgpu::Queue,
 	config: wgpu::SurfaceConfiguration,
 	clear_color: wgpu::Color,
 }
 
-impl<'window> Renderer<'window> {
-	pub async fn new<W>(window: &'window W, width: u32, height: u32) -> Result<Self, RendererError>
-	where
-		W: HasWindowHandle + HasDisplayHandle + Sync,
-	{
+impl Renderer {
+	pub async fn new(
+		window: &winit::window::Window,
+		width: u32,
+		height: u32,
+	) -> Result<Self, RendererError> {
 		Self::with_config(window, width, height, RendererConfig::default()).await
 	}
 
-	pub async fn with_config<W>(
-		window: &'window W,
+	pub async fn with_config(
+		window: &winit::window::Window,
 		width: u32,
 		height: u32,
 		renderer_config: RendererConfig,
-	) -> Result<Self, RendererError>
-	where
-		W: HasWindowHandle + HasDisplayHandle + Sync,
-	{
-		let instance = wgpu::Instance::default();
-		let surface = instance.create_surface(window)?;
+	) -> Result<Self, RendererError> {
+		let raw_display_handle = window.display_handle()?.as_raw();
+		let raw_window_handle = window.window_handle()?.as_raw();
 
-		let Some(adapter) = instance
+		unsafe {
+			Self::with_raw_handles(
+				raw_display_handle,
+				raw_window_handle,
+				width,
+				height,
+				renderer_config,
+			)
+			.await
+		}
+	}
+
+	pub async unsafe fn with_raw_handles(
+		raw_display_handle: RawDisplayHandle,
+		raw_window_handle: RawWindowHandle,
+		width: u32,
+		height: u32,
+		renderer_config: RendererConfig,
+	) -> Result<Self, RendererError> {
+		let instance = wgpu::Instance::default();
+
+		let surface = unsafe {
+			instance.create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
+				raw_display_handle,
+				raw_window_handle,
+			})?
+		};
+
+		let adapter = instance
 			.request_adapter(&wgpu::RequestAdapterOptions {
 				power_preference: renderer_config.power_preference,
 				compatible_surface: Some(&surface),
 				force_fallback_adapter: false,
 			})
 			.await
-		else {
-			return Err(RendererError::NoAdapter);
-		};
+			.map_err(|_| RendererError::NoAdapter)?;
 
 		let (device, queue) = adapter
-			.request_device(
-				&wgpu::DeviceDescriptor {
-					label: Some("nvui-renderer-device"),
-					required_features: wgpu::Features::empty(),
-					required_limits: wgpu::Limits::default(),
-				},
-				None,
-			)
+			.request_device(&wgpu::DeviceDescriptor {
+				label: Some("nvui-renderer-device"),
+				required_features: wgpu::Features::empty(),
+				required_limits: wgpu::Limits::default(),
+				memory_hints: wgpu::MemoryHints::Performance,
+				trace: wgpu::Trace::Off,
+				experimental_features: wgpu::ExperimentalFeatures::disabled(),
+			})
 			.await?;
 
 		let capabilities = surface.get_capabilities(&adapter);
@@ -124,6 +147,7 @@ impl<'window> Renderer<'window> {
 				color_attachments: &[Some(wgpu::RenderPassColorAttachment {
 					view: &view,
 					resolve_target: None,
+					depth_slice: None,
 					ops: wgpu::Operations {
 						load: wgpu::LoadOp::Clear(self.clear_color),
 						store: wgpu::StoreOp::Store,
@@ -132,6 +156,7 @@ impl<'window> Renderer<'window> {
 				depth_stencil_attachment: None,
 				occlusion_query_set: None,
 				timestamp_writes: None,
+				multiview_mask: None,
 			});
 		}
 

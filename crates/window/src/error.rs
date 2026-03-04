@@ -4,5 +4,5 @@ pub enum WindowError {
 	EventLoop(#[from] winit::error::EventLoopError),
 
 	#[error("CreateWindow({0})")]
-	CreateWindow(#[from] winit::error::OsError),
+	Os(#[from] winit::error::OsError),
 }
