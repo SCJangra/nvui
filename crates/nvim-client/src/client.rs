@@ -26,6 +26,6 @@ impl Nvim {
 	}
 
 	pub fn notifications(&self) -> Result<Receiver<NvimNotification>, Error> {
-		return self.rpc.subscribe().map_err(Error::Rpc);
+		self.rpc.subscribe().map_err(Error::Rpc)
 	}
 }

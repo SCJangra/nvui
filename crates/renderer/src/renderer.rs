@@ -39,6 +39,12 @@ impl Renderer {
 		}
 	}
 
+	/// # Safety
+	///
+	/// The provided raw display and window handles must remain valid for the
+	/// lifetime of the returned surface and must refer to the same live window.
+	/// Passing invalid, stale, or mismatched handles is undefined behavior in the
+	/// underlying windowing/graphics stack.
 	pub async unsafe fn with_raw_handles(
 		raw_display_handle: RawDisplayHandle,
 		raw_window_handle: RawWindowHandle,

@@ -147,14 +147,13 @@ impl EnumVariantField {
 	fn gen_de(self, index: usize, inject_method_from_tag: bool) -> TokenStream {
 		let var = format_ident!("field_{}", index - 1);
 
-		if inject_method_from_tag {
-			if let Some(field_ident) = &self.ident {
-				if field_ident == "method" {
-					return quote! {
-						let #var = method.clone();
-					};
-				}
-			}
+		if inject_method_from_tag
+			&& let Some(field_ident) = &self.ident
+			&& field_ident == "method"
+		{
+			return quote! {
+				let #var = method.clone();
+			};
 		}
 
 		if let Some(element_ty) = self.flatten {

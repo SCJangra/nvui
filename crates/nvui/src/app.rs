@@ -21,7 +21,7 @@ impl App {
 		let size = window.inner_size();
 
 		let renderer = smol::block_on(Renderer::with_config(
-			&window,
+			window,
 			size.width,
 			size.height,
 			RendererConfig::default(),

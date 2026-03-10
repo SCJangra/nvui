@@ -97,7 +97,7 @@ impl TaggedEnumInput {
 		let mut saw_other = false;
 
 		variants.iter().for_each(|v| match v.validate() {
-			Ok(val) if val == true => saw_other = true,
+			Ok(true) => saw_other = true,
 			Ok(_) => (),
 			Err(err) => error.push(err),
 		});
