@@ -24,10 +24,11 @@ pub struct NvimUiAttachParams {
 #[derive(Debug, Default, Serialize)]
 pub struct NvimUiOptions {
 	pub ext_multigrid: bool,
+	pub ext_linegrid: bool,
 }
 
 impl NvimUiOptions {
 	pub fn all() -> Self {
-		Self { ext_multigrid: true }
+		Self { ext_multigrid: true, ext_linegrid: true }
 	}
 }
