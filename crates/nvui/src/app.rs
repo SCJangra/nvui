@@ -1,7 +1,7 @@
 use flume::{Receiver, Sender};
 use winit::window::Window;
 
-use nvui_renderer::{Renderer, RendererConfig, RendererError};
+use renderer::{Renderer, RendererConfig, RendererError};
 use win::{WinEvent, WindowCommand};
 
 use crate::error::Error;

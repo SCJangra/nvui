@@ -1178,6 +1178,7 @@ name = "nvui"
 version = "0.1.0"
 dependencies = [
  "flume",
+ "nvui-nvim-client",
  "nvui-renderer",
  "nvui-window",
  "smol",

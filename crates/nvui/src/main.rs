@@ -1,5 +1,6 @@
 mod app;
 mod error;
+mod grid;
 
 use std::thread;
 

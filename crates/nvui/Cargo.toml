@@ -4,9 +4,9 @@ version = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-win = { package = "nvui-window", path = "../window" }
-nvui-renderer = { path = "../renderer" }
-
+win = { workspace = true }
+renderer = { workspace = true }
+nvim_client = { workspace = true }
 flume = { workspace = true }
 smol = { workspace = true }
 wgpu = { workspace = true }
