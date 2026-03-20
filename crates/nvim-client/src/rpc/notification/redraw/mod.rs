@@ -1,12 +1,27 @@
-use nvui_derive::DeserializeTaggedEnum;
-use serde::Deserialize;
+mod grid_clear;
+mod grid_cursor_goto;
+mod grid_line;
+mod grid_resize;
+mod mode_info_set;
 
-use crate::ModeInfo;
+use nvui_derive::DeserializeTaggedEnum;
+
+pub use grid_clear::*;
+pub use grid_cursor_goto::*;
+pub use grid_line::*;
+pub use grid_resize::*;
+pub use mode_info_set::*;
 
 #[derive(Debug, DeserializeTaggedEnum)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum RedrawNotification {
 	GridResize(#[tagged_enum(flatten)] Vec<GridResizeEvent>),
+
+	GridClear(#[tagged_enum(flatten)] Vec<GridClearEvent>),
+
+	GridCursorGoto(#[tagged_enum(flatten)] Vec<GridCursorGotoEvent>),
+
+	GridLine(#[tagged_enum(flatten)] Vec<GridLineEvent>),
 
 	ModeInfoSet(#[tagged_enum(flatten)] Vec<ModeInfoSetEvent>),
 
@@ -17,41 +32,9 @@ pub enum RedrawNotification {
 	},
 }
 
-#[derive(Debug, Deserialize)]
-#[cfg_attr(test, derive(PartialEq))]
-pub struct GridResizeEvent {
-	pub grid: u32,
-	pub width: u32,
-	pub height: u32,
-}
-
-#[derive(Debug, Deserialize)]
-#[cfg_attr(test, derive(PartialEq))]
-pub struct ModeInfoSetEvent {
-	pub cursor_style_enabled: bool,
-	pub mode_info: Vec<ModeInfo>,
-}
-
 #[cfg(test)]
 mod tests {
-	use super::*;
-
-	#[test]
-	fn de_grid_resize() {
-		let expected = RedrawNotification::GridResize(vec![
-			GridResizeEvent { grid: 1, width: 20, height: 20 },
-			GridResizeEvent { grid: 2, width: 40, height: 40 },
-		]);
-
-		let event = vec![
-			0x93, 0xAB, 0x67, 0x72, 0x69, 0x64, 0x5F, 0x72, 0x65, 0x73, 0x69, 0x7A, 0x65, 0x93,
-			0x01, 0x14, 0x14, 0x93, 0x02, 0x28, 0x28,
-		];
-
-		let deserialized: RedrawNotification = rmp_serde::from_slice(&event).unwrap();
-
-		assert_eq!(deserialized, expected)
-	}
+	use super::RedrawNotification;
 
 	#[test]
 	fn de_other() {
