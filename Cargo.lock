@@ -1177,10 +1177,9 @@ dependencies = [
 name = "nvui"
 version = "0.1.0"
 dependencies = [
- "flume",
+ "dashmap",
  "nvui-nvim-client",
  "nvui-renderer",
- "nvui-window",
  "smol",
  "thiserror 2.0.18",
  "wgpu",
@@ -1227,15 +1226,6 @@ dependencies = [
  "raw-window-handle",
  "thiserror 2.0.18",
  "wgpu",
- "winit",
-]
-
-[[package]]
-name = "nvui-window"
-version = "0.1.0"
-dependencies = [
- "flume",
- "thiserror 2.0.18",
  "winit",
 ]
 

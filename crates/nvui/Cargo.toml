@@ -4,11 +4,10 @@ version = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-win = { workspace = true }
 renderer = { workspace = true }
 nvim_client = { workspace = true }
-flume = { workspace = true }
 smol = { workspace = true }
 wgpu = { workspace = true }
 winit = { workspace = true }
 thiserror = { workspace = true }
+dashmap = { workspace = true }

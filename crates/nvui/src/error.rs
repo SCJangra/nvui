@@ -3,6 +3,6 @@ pub enum Error {
 	#[error("Renderer({0})")]
 	Renderer(#[from] renderer::RendererError),
 
-	#[error("Window({0})")]
-	SendCommand(#[from] flume::SendError<win::WindowCommand>),
+	#[error("CreateWindow({0})")]
+	Window(#[from] winit::error::OsError),
 }

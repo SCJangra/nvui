@@ -1,9 +1,0 @@
-[package]
-name = "nvui-window"
-version = { workspace = true }
-edition = { workspace = true }
-
-[dependencies]
-thiserror = { workspace = true }
-winit = { workspace = true }
-flume = { workspace = true }

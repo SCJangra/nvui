@@ -1,21 +1,20 @@
 mod app;
 mod error;
 mod grid;
-
-use std::thread;
+mod windows;
 
 use app::App;
+use windows::WindowConfig;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-	let (command_tx, command_rx) = flume::unbounded();
-	let (event_tx, event_rx) = flume::unbounded();
+	let event_loop = winit::event_loop::EventLoop::new()?;
+	let mut app = App::new(WindowConfig::default());
 
-	let app = App::new(event_rx, command_tx);
-	let app_thread = thread::spawn(move || app.start_event_loop());
+	event_loop.run_app(&mut app)?;
 
-	let result = win::start(win::WindowConfig::default(), command_rx, event_tx);
+	if let Some(error) = app.error.take() {
+		return Err(Box::new(error));
+	}
 
-	let _ = app_thread.join();
-
-	result.map_err(Into::into)
+	Ok(())
 }
