@@ -2,7 +2,10 @@ use std::process;
 
 use flume::Receiver;
 
-use crate::{Error, NvimNotification, RpcClient};
+use crate::{
+	Error, NvimNotification, NvimUiAttach, NvimUiAttachParams, NvimUiTryResize,
+	NvimUiTryResizeParams, RpcClient,
+};
 
 pub struct Nvim {
 	rpc: RpcClient,
@@ -27,5 +30,13 @@ impl Nvim {
 
 	pub fn notifications(&self) -> Result<Receiver<NvimNotification>, Error> {
 		self.rpc.subscribe().map_err(Error::Rpc)
+	}
+
+	pub async fn ui_attach(&self, params: NvimUiAttachParams) -> Result<rmpv::Value, Error> {
+		self.rpc.call::<NvimUiAttach>(params).await.map_err(Error::Rpc)
+	}
+
+	pub async fn ui_try_resize(&self, params: NvimUiTryResizeParams) -> Result<rmpv::Value, Error> {
+		self.rpc.call::<NvimUiTryResize>(params).await.map_err(Error::Rpc)
 	}
 }

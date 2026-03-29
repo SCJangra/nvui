@@ -10,7 +10,7 @@ resolver = "3"
 
 [workspace.dependencies]
 renderer = { package = "nvui-renderer", path = "crates/renderer" }
-nvim_client = { package = "nvui-nvim-client", path = "crates/nvim-client" }
+nvim = { package = "nvui-nvim-client", path = "crates/nvim-client" }
 rmp = "0.8"
 rmp-serde = "1"
 rmpv = { version = "1", features = ["with-serde"] }

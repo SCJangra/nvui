@@ -5,7 +5,7 @@ edition = { workspace = true }
 
 [dependencies]
 renderer = { workspace = true }
-nvim_client = { workspace = true }
+nvim = { workspace = true }
 smol = { workspace = true }
 wgpu = { workspace = true }
 winit = { workspace = true }

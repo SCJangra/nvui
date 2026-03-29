@@ -1,27 +1,53 @@
 use std::sync::Arc;
+use std::thread;
 
 use dashmap::DashMap;
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
+use winit::event_loop::EventLoopProxy;
 use winit::window::{Window, WindowAttributes, WindowId};
 
+use nvim::{Nvim, NvimNotification, NvimUiAttachParams, NvimUiOptions, RedrawNotification};
 use renderer::{Renderer, RendererConfig, RendererError};
 
 use crate::error::Error;
+use crate::grid::Grid;
 use crate::windows::WindowConfig;
 
 pub struct App {
 	pub config: WindowConfig,
 	pub windows: DashMap<WindowId, Arc<Window>>,
 	pub renderers: DashMap<WindowId, Renderer>,
+	pub grids: DashMap<WindowId, Grid>,
+	pub nvim: Nvim,
 	pub error: Option<Error>,
 }
 
+#[derive(Debug)]
+pub enum AppEvent {
+	Nvim(NvimNotification),
+}
+
 impl App {
-	pub fn new(config: WindowConfig) -> Self {
-		Self { config, windows: DashMap::new(), renderers: DashMap::new(), error: None }
+	pub fn new(config: WindowConfig, proxy: EventLoopProxy<AppEvent>) -> Result<Self, Error> {
+		let nvim = Nvim::start()?;
+		let notifications = nvim.notifications()?;
+		let proxy = proxy.clone();
+		thread::spawn(move || {
+			for notification in notifications.iter() {
+				let _ = proxy.send_event(AppEvent::Nvim(notification));
+			}
+		});
+		Ok(Self {
+			config,
+			windows: DashMap::new(),
+			renderers: DashMap::new(),
+			grids: DashMap::new(),
+			nvim,
+			error: None,
+		})
 	}
 
 	fn window_attributes(config: &WindowConfig) -> WindowAttributes {
@@ -40,6 +66,7 @@ impl App {
 		let window = event_loop.create_window(attributes)?;
 		let window = Arc::new(window);
 		self.windows.insert(window.id(), window.clone());
+		self.grids.insert(window.id(), Grid::new(0, 0));
 		Ok(window)
 	}
 
@@ -56,6 +83,64 @@ impl App {
 		self.renderers.insert(id, renderer);
 
 		Ok(())
+	}
+
+	fn attach_ui(&self, window: &Window) -> Result<(), Error> {
+		let size = window.inner_size();
+
+		let params = NvimUiAttachParams {
+			width: size.width,
+			height: size.height,
+			options: NvimUiOptions::all(),
+		};
+
+		smol::block_on(self.nvim.ui_attach(params))?;
+		Ok(())
+	}
+
+	fn handle_nvim_notification(&mut self, notification: NvimNotification) {
+		match notification {
+			NvimNotification::Redraw(events) => self.apply_redraw_events(events),
+			NvimNotification::Other { .. } => (),
+		}
+	}
+
+	fn apply_redraw_events(&mut self, events: Vec<RedrawNotification>) {
+		for event in events {
+			match event {
+				RedrawNotification::GridResize(resizes) => {
+					for resize in resizes {
+						if resize.grid != 1 {
+							continue;
+						}
+						for mut grid in self.grids.iter_mut() {
+							grid.resize(resize.width as usize, resize.height as usize);
+						}
+					}
+				},
+				RedrawNotification::GridClear(clears) => {
+					for clear in clears {
+						if clear.grid != 1 {
+							continue;
+						}
+						for mut grid in self.grids.iter_mut() {
+							grid.clear();
+						}
+					}
+				},
+				RedrawNotification::GridLine(lines) => {
+					for line in lines {
+						if line.grid != 1 {
+							continue;
+						}
+						for mut grid in self.grids.iter_mut() {
+							grid.set_line(line.row as usize, line.col_start as usize, &line.cells);
+						}
+					}
+				},
+				_ => (),
+			}
+		}
 	}
 
 	fn resize_renderer(&mut self, id: WindowId, window: &Window) -> Result<(), Error> {
@@ -93,6 +178,7 @@ impl App {
 
 	fn close_window(&mut self, event_loop: &ActiveEventLoop, id: WindowId) {
 		self.renderers.remove(&id);
+		self.grids.remove(&id);
 		self.windows.remove(&id);
 
 		if self.windows.is_empty() {
@@ -101,7 +187,7 @@ impl App {
 	}
 }
 
-impl ApplicationHandler for App {
+impl ApplicationHandler<AppEvent> for App {
 	fn resumed(&mut self, event_loop: &ActiveEventLoop) {
 		if !self.windows.is_empty() {
 			return;
@@ -118,6 +204,12 @@ impl ApplicationHandler for App {
 		};
 
 		if let Err(error) = self.create_renderer(window.id(), &window) {
+			self.error = Some(error);
+			event_loop.exit();
+			return;
+		}
+
+		if let Err(error) = self.attach_ui(&window) {
 			self.error = Some(error);
 			event_loop.exit();
 			return;
@@ -159,6 +251,12 @@ impl ApplicationHandler for App {
 				}
 			},
 			_ => (),
+		}
+	}
+
+	fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: AppEvent) {
+		match event {
+			AppEvent::Nvim(notification) => self.handle_nvim_notification(notification),
 		}
 	}
 }
