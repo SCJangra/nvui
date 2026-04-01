@@ -9,7 +9,10 @@ use winit::event_loop::ActiveEventLoop;
 use winit::event_loop::EventLoopProxy;
 use winit::window::{Window, WindowAttributes, WindowId};
 
-use nvim::{Nvim, NvimNotification, NvimUiAttachParams, NvimUiOptions, RedrawNotification};
+use nvim::{
+	Nvim, NvimNotification, NvimUiAttachParams, NvimUiOptions, NvimUiTryResizeParams,
+	RedrawNotification,
+};
 use renderer::{Renderer, RendererConfig, RendererError};
 
 use crate::error::Error;
@@ -18,9 +21,10 @@ use crate::windows::WindowConfig;
 
 pub struct App {
 	pub config: WindowConfig,
-	pub windows: DashMap<WindowId, Arc<Window>>,
-	pub renderers: DashMap<WindowId, Renderer>,
-	pub grids: DashMap<WindowId, Grid>,
+	pub window: DashMap<WindowId, Arc<Window>>,
+	pub renderer: DashMap<WindowId, Renderer>,
+	pub grid: DashMap<u32, Grid>,
+	pub grid_window: DashMap<u32, WindowId>,
 	pub nvim: Nvim,
 	pub error: Option<Error>,
 }
@@ -35,16 +39,19 @@ impl App {
 		let nvim = Nvim::start()?;
 		let notifications = nvim.notifications()?;
 		let proxy = proxy.clone();
+
 		thread::spawn(move || {
 			for notification in notifications.iter() {
 				let _ = proxy.send_event(AppEvent::Nvim(notification));
 			}
 		});
+
 		Ok(Self {
 			config,
-			windows: DashMap::new(),
-			renderers: DashMap::new(),
-			grids: DashMap::new(),
+			window: DashMap::new(),
+			renderer: DashMap::new(),
+			grid: DashMap::new(),
+			grid_window: DashMap::new(),
 			nvim,
 			error: None,
 		})
@@ -65,8 +72,7 @@ impl App {
 		let attributes = Self::window_attributes(config);
 		let window = event_loop.create_window(attributes)?;
 		let window = Arc::new(window);
-		self.windows.insert(window.id(), window.clone());
-		self.grids.insert(window.id(), Grid::new(0, 0));
+		self.window.insert(window.id(), window.clone());
 		Ok(window)
 	}
 
@@ -80,12 +86,12 @@ impl App {
 			RendererConfig::default(),
 		))?;
 
-		self.renderers.insert(id, renderer);
+		self.renderer.insert(id, renderer);
 
 		Ok(())
 	}
 
-	fn attach_ui(&self, window: &Window) -> Result<(), Error> {
+	fn attach_ui(&mut self, window: &Window) -> Result<(), Error> {
 		let size = window.inner_size();
 
 		let params = NvimUiAttachParams {
@@ -95,6 +101,17 @@ impl App {
 		};
 
 		smol::block_on(self.nvim.ui_attach(params))?;
+		self.grid.insert(1, Grid::new(0, 0));
+		self.grid_window.insert(1, window.id());
+		Ok(())
+	}
+
+	fn resize_nvim_ui(&self, window: &Window) -> Result<(), Error> {
+		let size = window.inner_size();
+
+		let params = NvimUiTryResizeParams { width: size.width, height: size.height };
+
+		smol::block_on(self.nvim.ui_try_resize(params))?;
 		Ok(())
 	}
 
@@ -110,32 +127,56 @@ impl App {
 			match event {
 				RedrawNotification::GridResize(resizes) => {
 					for resize in resizes {
-						if resize.grid != 1 {
+						let Some(mut grid) = self.grid.get_mut(&resize.grid) else {
+							// TODO: Log unknown grid
 							continue;
-						}
-						for mut grid in self.grids.iter_mut() {
-							grid.resize(resize.width as usize, resize.height as usize);
-						}
+						};
+						grid.resize(resize.width as usize, resize.height as usize);
+						let Some(window_id) = self.grid_window.get(&resize.grid) else {
+							// TODO: Log error
+							continue;
+						};
+						let Some(window) = self.window.get(window_id.value()) else {
+							// TODO: Log error
+							continue;
+						};
+						window.value().request_redraw();
 					}
 				},
 				RedrawNotification::GridClear(clears) => {
 					for clear in clears {
-						if clear.grid != 1 {
+						let Some(mut grid) = self.grid.get_mut(&clear.grid) else {
+							// TODO: Log error
 							continue;
-						}
-						for mut grid in self.grids.iter_mut() {
-							grid.clear();
-						}
+						};
+						grid.clear();
+						let Some(window_id) = self.grid_window.get(&clear.grid) else {
+							// TODO: Log error
+							continue;
+						};
+						let Some(window) = self.window.get(window_id.value()) else {
+							// TODO: Log error
+							continue;
+						};
+						window.value().request_redraw();
 					}
 				},
 				RedrawNotification::GridLine(lines) => {
 					for line in lines {
-						if line.grid != 1 {
+						let Some(mut grid) = self.grid.get_mut(&line.grid) else {
+							// TODO: Log error
 							continue;
-						}
-						for mut grid in self.grids.iter_mut() {
-							grid.set_line(line.row as usize, line.col_start as usize, &line.cells);
-						}
+						};
+						grid.set_line(line.row as usize, line.col_start as usize, &line.cells);
+						let Some(window_id) = self.grid_window.get(&line.grid) else {
+							// TODO: Log error
+							continue;
+						};
+						let Some(window) = self.window.get(window_id.value()) else {
+							// TODO: Log error
+							continue;
+						};
+						window.value().request_redraw();
 					}
 				},
 				_ => (),
@@ -144,7 +185,7 @@ impl App {
 	}
 
 	fn resize_renderer(&mut self, id: WindowId, window: &Window) -> Result<(), Error> {
-		let Some(mut renderer) = self.renderers.get_mut(&id) else { return Ok(()) };
+		let Some(mut renderer) = self.renderer.get_mut(&id) else { return Ok(()) };
 		let size = window.inner_size();
 
 		renderer.resize(size.width, size.height);
@@ -157,7 +198,7 @@ impl App {
 		id: WindowId,
 		window: &Window,
 	) -> Result<(), Error> {
-		let Some(mut renderer) = self.renderers.get_mut(&id) else { return Ok(()) };
+		let Some(mut renderer) = self.renderer.get_mut(&id) else { return Ok(()) };
 
 		let Err(err) = renderer.render_clear() else { return Ok(()) };
 
@@ -177,11 +218,12 @@ impl App {
 	}
 
 	fn close_window(&mut self, event_loop: &ActiveEventLoop, id: WindowId) {
-		self.renderers.remove(&id);
-		self.grids.remove(&id);
-		self.windows.remove(&id);
+		self.renderer.remove(&id);
+		self.window.remove(&id);
 
-		if self.windows.is_empty() {
+		if self.window.is_empty() {
+			self.grid.clear();
+			self.grid_window.clear();
 			event_loop.exit();
 		}
 	}
@@ -189,7 +231,7 @@ impl App {
 
 impl ApplicationHandler<AppEvent> for App {
 	fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-		if !self.windows.is_empty() {
+		if !self.window.is_empty() {
 			return;
 		}
 
@@ -224,7 +266,7 @@ impl ApplicationHandler<AppEvent> for App {
 		window_id: WindowId,
 		event: WindowEvent,
 	) {
-		let Some(window) = self.windows.get(&window_id).map(|entry| entry.value().clone()) else {
+		let Some(window) = self.window.get(&window_id).map(|entry| entry.value().clone()) else {
 			return;
 		};
 
@@ -236,10 +278,20 @@ impl ApplicationHandler<AppEvent> for App {
 				if let Err(error) = self.resize_renderer(window_id, &window) {
 					self.error = Some(error);
 					event_loop.exit();
+					return;
+				}
+				if let Err(error) = self.resize_nvim_ui(&window) {
+					self.error = Some(error);
+					event_loop.exit();
 				}
 			},
 			WindowEvent::ScaleFactorChanged { .. } => {
 				if let Err(error) = self.resize_renderer(window_id, &window) {
+					self.error = Some(error);
+					event_loop.exit();
+					return;
+				}
+				if let Err(error) = self.resize_nvim_ui(&window) {
 					self.error = Some(error);
 					event_loop.exit();
 				}
