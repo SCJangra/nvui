@@ -179,6 +179,24 @@ impl App {
 						window.value().request_redraw();
 					}
 				},
+				RedrawNotification::GridCursorGoto(cursors) => {
+					for cursor in cursors {
+						let Some(mut grid) = self.grid.get_mut(&cursor.grid) else {
+							// TODO: Log error
+							continue;
+						};
+						grid.set_cursor(cursor.row as usize, cursor.col as usize);
+						let Some(window_id) = self.grid_window.get(&cursor.grid) else {
+							// TODO: Log error
+							continue;
+						};
+						let Some(window) = self.window.get(window_id.value()) else {
+							// TODO: Log error
+							continue;
+						};
+						window.value().request_redraw();
+					}
+				},
 				_ => (),
 			}
 		}

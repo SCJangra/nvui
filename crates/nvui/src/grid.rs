@@ -13,11 +13,14 @@ pub struct Grid {
 	pub width: usize,
 	pub height: usize,
 	pub cells: Vec<GridCell>,
+	pub cursor_row: usize,
+	pub cursor_col: usize,
 }
 
 impl Grid {
 	pub fn new(width: usize, height: usize) -> Self {
-		let mut grid = Self { width: 0, height: 0, cells: Vec::new() };
+		let mut grid =
+			Self { width: 0, height: 0, cells: Vec::new(), cursor_row: 0, cursor_col: 0 };
 		grid.resize(width, height);
 		grid
 	}
@@ -33,6 +36,8 @@ impl Grid {
 		for cell in &mut self.cells {
 			*cell = GridCell { ch: ' ', hl_id: None };
 		}
+		self.cursor_row = 0;
+		self.cursor_col = 0;
 	}
 
 	pub fn set_line(&mut self, row: usize, col_start: usize, cells: &[NvimGridCell]) {
@@ -53,6 +58,14 @@ impl Grid {
 				col += 1;
 			}
 		}
+	}
+
+	pub fn set_cursor(&mut self, row: usize, col: usize) {
+		if row >= self.height || col >= self.width {
+			return;
+		}
+		self.cursor_row = row;
+		self.cursor_col = col;
 	}
 
 	fn cell_index(&self, row: usize, col: usize) -> usize {
@@ -115,5 +128,18 @@ mod tests {
 		];
 
 		assert_eq!(grid.cells, expected);
+	}
+
+	#[test]
+	fn set_cursor() {
+		let mut grid = Grid::new(3, 2);
+
+		grid.set_cursor(1, 2);
+		assert_eq!(grid.cursor_row, 1);
+		assert_eq!(grid.cursor_col, 2);
+
+		grid.set_cursor(5, 1);
+		assert_eq!(grid.cursor_row, 1);
+		assert_eq!(grid.cursor_col, 2);
 	}
 }
