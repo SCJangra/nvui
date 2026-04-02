@@ -17,6 +17,7 @@ use renderer::{Renderer, RendererConfig, RendererError};
 
 use crate::error::Error;
 use crate::grid::Grid;
+use crate::highlight::HighlightState;
 use crate::windows::WindowConfig;
 
 pub struct App {
@@ -25,6 +26,7 @@ pub struct App {
 	pub renderer: DashMap<WindowId, Renderer>,
 	pub grid: DashMap<u32, Grid>,
 	pub grid_window: DashMap<u32, WindowId>,
+	pub highlight_state: HighlightState,
 	pub nvim: Nvim,
 	pub error: Option<Error>,
 }
@@ -52,6 +54,7 @@ impl App {
 			renderer: DashMap::new(),
 			grid: DashMap::new(),
 			grid_window: DashMap::new(),
+			highlight_state: HighlightState::new(),
 			nvim,
 			error: None,
 		})
@@ -196,6 +199,15 @@ impl App {
 						};
 						window.value().request_redraw();
 					}
+				},
+				RedrawNotification::HlAttrDefine(attrs) => {
+					self.highlight_state.set_attrs(attrs);
+				},
+				RedrawNotification::DefaultColorsSet(colors) => {
+					self.highlight_state.set_default_colors(colors);
+				},
+				RedrawNotification::HlGroupSet(groups) => {
+					self.highlight_state.set_hl_groups(groups);
 				},
 				_ => (),
 			}

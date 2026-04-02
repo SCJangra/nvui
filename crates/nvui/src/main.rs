@@ -1,6 +1,7 @@
 mod app;
 mod error;
 mod grid;
+mod highlight;
 mod windows;
 
 use app::{App, AppEvent};

@@ -1,15 +1,21 @@
+mod default_colors_set;
 mod grid_clear;
 mod grid_cursor_goto;
 mod grid_line;
 mod grid_resize;
+mod hl_attr_define;
+mod hl_group_set;
 mod mode_info_set;
 
 use nvui_derive::DeserializeTaggedEnum;
 
+pub use default_colors_set::*;
 pub use grid_clear::*;
 pub use grid_cursor_goto::*;
 pub use grid_line::*;
 pub use grid_resize::*;
+pub use hl_attr_define::*;
+pub use hl_group_set::*;
 pub use mode_info_set::*;
 
 #[derive(Debug, DeserializeTaggedEnum)]
@@ -22,6 +28,12 @@ pub enum RedrawNotification {
 	GridCursorGoto(#[tagged_enum(flatten)] Vec<GridCursorGotoEvent>),
 
 	GridLine(#[tagged_enum(flatten)] Vec<GridLineEvent>),
+
+	DefaultColorsSet(#[tagged_enum(flatten)] Vec<DefaultColorsSetEvent>),
+
+	HlAttrDefine(#[tagged_enum(flatten)] Vec<HlAttrDefineEvent>),
+
+	HlGroupSet(#[tagged_enum(flatten)] Vec<HlGroupSetEvent>),
 
 	ModeInfoSet(#[tagged_enum(flatten)] Vec<ModeInfoSetEvent>),
 
