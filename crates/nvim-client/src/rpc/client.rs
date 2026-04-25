@@ -63,13 +63,14 @@ impl RpcClientInner {
 				}
 
 				#[rustfmt::skip]
-				let Ok(request) = request.recv()
-					// TODO: Log error
-					else { continue };
+				let Ok(request) = request
+					.recv()
+					.inspect_err(|err| tracing::error!("Receiving request on channel failed: {err}"))
+					 else { continue };
 
 				#[rustfmt::skip]
-                let Err(_err) = Self::send_request(request, &mut writer) else { continue; };
-				// TODO: Log error
+				let Err(err) = Self::send_request(request, &mut writer) else { continue; };
+				tracing::error!("Failed to send request: {err}");
 			}
 		});
 
@@ -83,13 +84,12 @@ impl RpcClientInner {
 
 				#[rustfmt::skip]
 				let Ok(msg) = IncomingRpcMessage::<rmpv::Value>::deserialize(&mut deserializer)
-					 // TODO: Log error
+					.inspect_err(|err| tracing::error!("Failed to deserialize incoming RPC message: {err}"))
 					 else { continue };
 
 				#[rustfmt::skip]
-				let Err(_err) = self.pricess_msg(msg)
-					 // TODO: Log error
-					 else { continue; };
+				let Err(err) = self.pricess_msg(msg) else { continue; };
+				tracing::error!("Failed to process message: {err}");
 			}
 		});
 
@@ -108,8 +108,8 @@ impl RpcClientInner {
 
 	fn pricess_msg(&self, msg: IncomingRpcMessage<rmpv::Value>) -> Result<(), RpcError> {
 		match msg {
-			IncomingRpcMessage::Request(_) => {
-				// TODO: Log this request
+			IncomingRpcMessage::Request(req) => {
+				tracing::info!("Received unhandled RPC request: {req:?}");
 				return Ok(());
 			},
 			IncomingRpcMessage::Notification(notification) => {

@@ -9,10 +9,7 @@ use winit::event_loop::ActiveEventLoop;
 use winit::event_loop::EventLoopProxy;
 use winit::window::{Window, WindowAttributes, WindowId};
 
-use nvim::{
-	Nvim, NvimNotification, NvimUiAttachParams, NvimUiOptions, NvimUiTryResizeParams,
-	RedrawNotification,
-};
+use nvim::{Nvim, NvimNotification, NvimUiAttachParams, NvimUiOptions, NvimUiTryResizeParams, RedrawNotification};
 use renderer::{Renderer, RendererConfig, RendererError};
 
 use crate::error::Error;
@@ -67,11 +64,7 @@ impl App {
 			.with_resizable(config.resizable)
 	}
 
-	fn create_window(
-		&mut self,
-		event_loop: &ActiveEventLoop,
-		config: &WindowConfig,
-	) -> Result<Arc<Window>, Error> {
+	fn create_window(&mut self, event_loop: &ActiveEventLoop, config: &WindowConfig) -> Result<Arc<Window>, Error> {
 		let attributes = Self::window_attributes(config);
 		let window = event_loop.create_window(attributes)?;
 		let window = Arc::new(window);
@@ -82,12 +75,8 @@ impl App {
 	fn create_renderer(&mut self, id: WindowId, window: &Window) -> Result<(), Error> {
 		let size = window.inner_size();
 
-		let renderer = smol::block_on(Renderer::with_config(
-			window,
-			size.width,
-			size.height,
-			RendererConfig::default(),
-		))?;
+		let renderer =
+			smol::block_on(Renderer::with_config(window, size.width, size.height, RendererConfig::default()))?;
 
 		self.renderer.insert(id, renderer);
 
@@ -97,11 +86,7 @@ impl App {
 	fn attach_ui(&mut self, window: &Window) -> Result<(), Error> {
 		let size = window.inner_size();
 
-		let params = NvimUiAttachParams {
-			width: size.width,
-			height: size.height,
-			options: NvimUiOptions::all(),
-		};
+		let params = NvimUiAttachParams { width: size.width, height: size.height, options: NvimUiOptions::all() };
 
 		smol::block_on(self.nvim.ui_attach(params))?;
 		self.grid.insert(1, Grid::new(0, 0));
@@ -131,16 +116,16 @@ impl App {
 				RedrawNotification::GridResize(resizes) => {
 					for resize in resizes {
 						let Some(mut grid) = self.grid.get_mut(&resize.grid) else {
-							// TODO: Log unknown grid
+							tracing::warn!("GridResize: Unknown grid {}", resize.grid);
 							continue;
 						};
 						grid.resize(resize.width as usize, resize.height as usize);
 						let Some(window_id) = self.grid_window.get(&resize.grid) else {
-							// TODO: Log error
+							tracing::error!("GridResize: Unknown grid_window for grid {}", resize.grid);
 							continue;
 						};
 						let Some(window) = self.window.get(window_id.value()) else {
-							// TODO: Log error
+							tracing::error!("GridResize: Unknown window for window_id {window_id:?}");
 							continue;
 						};
 						window.value().request_redraw();
@@ -149,16 +134,16 @@ impl App {
 				RedrawNotification::GridClear(clears) => {
 					for clear in clears {
 						let Some(mut grid) = self.grid.get_mut(&clear.grid) else {
-							// TODO: Log error
+							tracing::warn!("GridClear: Unknown grid {}", clear.grid);
 							continue;
 						};
 						grid.clear();
 						let Some(window_id) = self.grid_window.get(&clear.grid) else {
-							// TODO: Log error
+							tracing::error!("GridClear: Unknown grid_window for grid {}", clear.grid);
 							continue;
 						};
 						let Some(window) = self.window.get(window_id.value()) else {
-							// TODO: Log error
+							tracing::error!("GridClear: Unknown window for window_id {window_id:?}");
 							continue;
 						};
 						window.value().request_redraw();
@@ -167,16 +152,16 @@ impl App {
 				RedrawNotification::GridLine(lines) => {
 					for line in lines {
 						let Some(mut grid) = self.grid.get_mut(&line.grid) else {
-							// TODO: Log error
+							tracing::warn!("GridLine: Unknown grid {}", line.grid);
 							continue;
 						};
 						grid.set_line(line.row as usize, line.col_start as usize, &line.cells);
 						let Some(window_id) = self.grid_window.get(&line.grid) else {
-							// TODO: Log error
+							tracing::error!("GridLine: Unknown grid_window for grid {}", line.grid);
 							continue;
 						};
 						let Some(window) = self.window.get(window_id.value()) else {
-							// TODO: Log error
+							tracing::error!("GridLine: Unknown window for window_id {window_id:?}");
 							continue;
 						};
 						window.value().request_redraw();
@@ -185,16 +170,16 @@ impl App {
 				RedrawNotification::GridCursorGoto(cursors) => {
 					for cursor in cursors {
 						let Some(mut grid) = self.grid.get_mut(&cursor.grid) else {
-							// TODO: Log error
+							tracing::warn!("GridCursorGoto: Unknown grid {}", cursor.grid);
 							continue;
 						};
 						grid.set_cursor(cursor.row as usize, cursor.col as usize);
 						let Some(window_id) = self.grid_window.get(&cursor.grid) else {
-							// TODO: Log error
+							tracing::error!("GridCursorGoto: Unknown grid_window for grid {}", cursor.grid);
 							continue;
 						};
 						let Some(window) = self.window.get(window_id.value()) else {
-							// TODO: Log error
+							tracing::error!("GridCursorGoto: Unknown window for window_id {window_id:?}");
 							continue;
 						};
 						window.value().request_redraw();
@@ -222,26 +207,20 @@ impl App {
 		Ok(())
 	}
 
-	fn redraw_renderer(
-		&mut self,
-		event_loop: &ActiveEventLoop,
-		id: WindowId,
-		window: &Window,
-	) -> Result<(), Error> {
+	fn redraw_renderer(&mut self, event_loop: &ActiveEventLoop, id: WindowId, window: &Window) -> Result<(), Error> {
 		let Some(mut renderer) = self.renderer.get_mut(&id) else { return Ok(()) };
 
 		let Err(err) = renderer.render_clear() else { return Ok(()) };
 
 		match err {
-			RendererError::Surface(wgpu::SurfaceError::Lost)
-			| RendererError::Surface(wgpu::SurfaceError::Outdated) => {
+			RendererError::Surface(wgpu::SurfaceError::Lost) | RendererError::Surface(wgpu::SurfaceError::Outdated) => {
 				window.request_redraw();
 			},
 			RendererError::Surface(wgpu::SurfaceError::OutOfMemory) => {
 				self.error = Some(err.into());
 				event_loop.exit();
 			},
-			_ => (), // TODO: Log error
+			_ => tracing::error!("Redraw renderer error: {err:?}"),
 		}
 
 		Ok(())
@@ -290,15 +269,13 @@ impl ApplicationHandler<AppEvent> for App {
 		window.request_redraw();
 	}
 
-	fn window_event(
-		&mut self,
-		event_loop: &ActiveEventLoop,
-		window_id: WindowId,
-		event: WindowEvent,
-	) {
-		let Some(window) = self.window.get(&window_id).map(|entry| entry.value().clone()) else {
-			return;
-		};
+	fn window_event(&mut self, event_loop: &ActiveEventLoop, window_id: WindowId, event: WindowEvent) {
+		#[rustfmt::skip]
+		let Some(window) = self
+			.window
+			.get(&window_id)
+			.map(|entry| entry.value().clone())
+			 else { return };
 
 		match event {
 			WindowEvent::CloseRequested => {
